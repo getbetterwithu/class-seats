@@ -482,13 +482,16 @@ function renderHistoryList() {
   const hist = loadLSHistory();
   const el   = document.getElementById('historyList');
   if (!hist.length) { el.innerHTML='<div class="history-empty">저장된 배치 이력이 없습니다.</div>'; return; }
-  el.innerHTML = hist.slice().reverse().map((h,i)=>`
-    <div class="history-item">
-      <span class="history-item-date">📅 ${h.date}</span>
+  el.innerHTML = hist.slice().reverse().map((h,i)=>{
+    const d = new Date(h.savedAt);
+    const timeStr = d.toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="history-item">
+      <span class="history-item-date">📅 ${timeStr}</span>
       <span class="history-item-count">${h.seats.filter(Boolean).length}명</span>
       <button class="btn-small btn-small-ghost"
         onclick="loadHistoryItem(${hist.length-1-i})">불러오기</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function loadHistoryItem(idx) {
