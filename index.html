@@ -51,6 +51,11 @@
     }
     .seat.empty { background:var(--empty-bg); border-color:#303050; color:#44446a; cursor:default; font-size:.8rem; font-weight:400; padding-bottom:14px; }
     .seat-row { font-size:.6rem; color:#5555aa; position:absolute; top:5px; left:7px; font-weight:400; }
+    .prev-name {
+      position:absolute; top:5px; right:7px;
+      font-size:.58rem; color:#5555aa; font-weight:400;
+      max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
     .swap-badge {
       position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
       font-size:.58rem; font-weight:700; padding:1px 6px; border-radius:6px;
@@ -339,9 +344,9 @@ const SWAP_PALETTE = [
 ];
 
 // ================================================================
-// 상태 — history 항목: { seats[], swapPairs[], swappedMap{} }
+// 상태 — history 항목: { seats[], swapPairs[], swappedMap{}, prevOccupants[] }
 // ================================================================
-let history   = [{seats:Array(TOTAL).fill(null), swapPairs:[], swappedMap:{}}];
+let history   = [{seats:Array(TOTAL).fill(null), swapPairs:[], swappedMap:{}, prevOccupants:[]}];
 let histIdx   = 0;
 let animating = false;
 let dragSrc   = null;
@@ -351,6 +356,7 @@ const cur         = ()=> history[histIdx];
 const curSeats    = ()=> cur().seats;
 const curPairs    = ()=> cur().swapPairs;
 const curMap      = ()=> cur().swappedMap;
+const curPrev     = ()=> cur().prevOccupants || [];
 
 // ================================================================
 // LocalStorage
@@ -537,10 +543,11 @@ function swapSnd() { beep(660,.09,'sine',.18); setTimeout(()=>beep(990,.14,'sine
 function render() {
   const grid = document.getElementById('seatGrid');
   grid.innerHTML = '';
-  const s = curSeats(), sm = curMap();
+  const s = curSeats(), sm = curMap(), sp = curPrev();
 
   s.forEach((name,idx)=>{
     const row=Math.floor(idx/5)+1, isEmpty=name===null, sw=sm[idx];
+    const prevName=sp[idx]??null;
     const el=document.createElement('div');
     el.className='seat'+(isEmpty?' empty':'');
     el.dataset.idx=idx;
@@ -552,8 +559,11 @@ function render() {
     }
     const badge=sw&&!isEmpty
       ?`<span class="swap-badge" style="color:${sw.color.text};border-color:${sw.color.border};background:${sw.color.bg}">↔ ${sw.partner}</span>`:'';
+    // 이전 달 자리 주인 (이전 배치가 있고, 현재와 다른 경우만 표시)
+    const prevBadge=prevName&&!isEmpty&&prevName!==name
+      ?`<span class="prev-name">↖ ${prevName}</span>`:'';
 
-    el.innerHTML=`<span class="seat-row">${row}줄</span>${name??'빈자리'}${badge}`;
+    el.innerHTML=`<span class="seat-row">${row}줄</span>${prevBadge}${name??'빈자리'}${badge}`;
 
     if(!isEmpty&&!animating) {
       el.draggable=true;
@@ -596,39 +606,41 @@ async function startRandomize() {
   animating=true; actx();
   await doCountdown();
 
-  const names  = getNames(); // 현재 설정된 학생 목록
-  const s      = loadSettings();
-  const prev   = s.preventSameSeat ? getPrevSeats() : null;
+  const names   = getNames();
+  const s       = loadSettings();
+  const current = curSeats(); // 랜덤 전 현재 배치 → prevOccupants 로 기록
+  const prevOccupants = current.slice();
+  const hasCurrentArrangement = current.some(x => x !== null);
+  // 체크박스 켜면 저번 달 저장 배치와도 비교
+  const savedPrev = s.preventSameSeat ? getPrevSeats() : null;
 
   // 24명이면 index 24 는 항상 null (5분단 5줄 고정 빈자리)
-  // 25명이면 모두 채움
   let finalSeats;
   if(names.length===24) {
-    let shuffled;
-    if(prev) {
-      let t=0;
-      const prev24 = [...prev.slice(0,EMPTY_SEAT_IDX)]; // prev의 0-23 위치만 비교
-      do { shuffled=fisherYates([...names]); t++; }
-      while(!noSameSeats24(shuffled,prev24)&&t<200);
-    } else {
-      shuffled=fisherYates([...names]);
-    }
-    finalSeats=[...shuffled, null]; // index 24 = null
+    let shuffled, t=0;
+    do {
+      shuffled = fisherYates([...names]);
+      t++;
+      const ok1 = !hasCurrentArrangement || noSameSeats24(shuffled, current.slice(0,EMPTY_SEAT_IDX));
+      const ok2 = !savedPrev || noSameSeats24(shuffled, savedPrev.slice(0,EMPTY_SEAT_IDX));
+      if(ok1 && ok2) break;
+    } while(t < 300);
+    finalSeats = [...shuffled, null];
   } else {
     // 25명
-    const pool=[...names];
-    if(prev) {
-      let t=0, sh;
-      do { sh=fisherYates(pool); t++; }
-      while(!noSameSeatsAll(sh,prev)&&t<200);
-      finalSeats=sh;
-    } else {
-      finalSeats=fisherYates(pool);
-    }
+    let finalSh, t=0;
+    do {
+      finalSh = fisherYates([...names]);
+      t++;
+      const ok1 = !hasCurrentArrangement || noSameSeatsAll(finalSh, current);
+      const ok2 = !savedPrev || noSameSeatsAll(finalSh, savedPrev);
+      if(ok1 && ok2) break;
+    } while(t < 300);
+    finalSeats = finalSh;
   }
 
   await doReveal(finalSeats);
-  pushHistory({seats:[...finalSeats], swapPairs:[], swappedMap:{}});
+  pushHistory({seats:[...finalSeats], swapPairs:[], swappedMap:{}, prevOccupants});
   saveToLocalHistory();
 
   document.getElementById('resultDate').textContent=`📅 ${monthStr()} 배치 완료`;
@@ -743,7 +755,7 @@ function onDrop(e) {
   if(nameA!==null) newMap[tgt]    ={partner:nameA, color};
   if(nameB!==null) newMap[dragSrc]={partner:nameB, color};
 
-  pushHistory({seats:newSeats, swapPairs:newPairs, swappedMap:newMap});
+  pushHistory({seats:newSeats, swapPairs:newPairs, swappedMap:newMap, prevOccupants:curPrev()});
   dragSrc=null; render();
 }
 
