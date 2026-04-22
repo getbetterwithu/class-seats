@@ -245,6 +245,16 @@
       </div>
     </div>
 
+    <!-- 배치표 제목 -->
+    <div class="settings-section">
+      <div class="section-title">배치표 제목 (Title)</div>
+      <div class="input-row">
+        <input class="input-field" id="titleLabel" placeholder="예) 2026년 5월, 1학기 2차 등" />
+        <button class="btn-small btn-small-primary" onclick="saveTitleLabel()">적용</button>
+      </div>
+      <div class="input-hint">비워두면 현재 월(月)을 자동으로 사용합니다.</div>
+    </div>
+
     <!-- 노션 연동 -->
     <div class="settings-section">
       <div class="section-title">노션 연동 (Notion)</div>
@@ -387,7 +397,9 @@ function getNames() { return loadStudentData().map(s=>s.name); }
 function initSettingsUI() {
   const s = loadSettings();
   if (s.notionPageId) document.getElementById('notionPageId').value = s.notionPageId;
+  if (s.titleLabel)   document.getElementById('titleLabel').value   = s.titleLabel;
   document.getElementById('chkPrevent').checked = !!s.preventSameSeat;
+  updateSubtitle();
   refreshStudentCountBadge();
   // Wire paste event
   document.getElementById('pasteArea').addEventListener('input', onPasteAreaInput);
@@ -463,6 +475,21 @@ function showStudentStatus(msg, ok) {
   setTimeout(()=>{ el.textContent=''; el.className=''; }, 2500);
 }
 
+function saveTitleLabel() {
+  const val = document.getElementById('titleLabel').value.trim();
+  const s = loadSettings(); s.titleLabel = val; saveSettings(s);
+  updateSubtitle();
+  const el = document.getElementById('titleLabel');
+  el.style.borderColor = '#4ade80';
+  setTimeout(() => { el.style.borderColor = ''; }, 1500);
+}
+
+function updateSubtitle() {
+  const s = loadSettings();
+  const label = s.titleLabel || monthStr();
+  document.getElementById('dateDisplay').textContent = label + ' 좌석 배치표';
+}
+
 function saveNotionSettings() {
   const id = document.getElementById('notionPageId').value.trim();
   const s  = loadSettings(); s.notionPageId = id; saveSettings(s);
@@ -508,7 +535,7 @@ function loadHistoryItem(idx) {
 // 날짜
 // ================================================================
 function monthStr() { const d=new Date(); return `${d.getFullYear()}년 ${d.getMonth()+1}월`; }
-document.getElementById('dateDisplay').textContent = monthStr() + ' 좌석 배치표';
+// subtitle은 initSettingsUI() 안의 updateSubtitle()에서 처리
 
 // ================================================================
 // Web Audio
