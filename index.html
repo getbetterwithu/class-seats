@@ -93,6 +93,8 @@
     .btn-print:hover:not(:disabled) { transform:translateY(-2px); }
     .btn-save { background:linear-gradient(135deg,#c0392b,#e74c3c); color:#fff; }
     .btn-save:hover:not(:disabled) { transform:translateY(-2px); }
+    .btn-reset { background:#252545; color:#f87171; border:1px solid #5a2a2a; }
+    .btn-reset:hover:not(:disabled) { background:#3a1a1a; color:#fca5a5; transform:translateY(-1px); }
 
     .drag-hint { text-align:center; color:#44447a; font-size:.78rem; margin-bottom:8px; }
     .history-info { text-align:center; color:#55558a; font-size:.78rem; margin-bottom:16px; min-height:18px; }
@@ -310,6 +312,7 @@
     <button class="btn btn-undo"  id="btnUndo"  onclick="undo()"  disabled>↩ 되돌리기</button>
     <button class="btn btn-redo"  id="btnRedo"  onclick="redo()"  disabled>↪ 다시실행</button>
     <button class="btn btn-print" id="btnPrint" onclick="window.print()">🖨️ 인쇄 / PDF</button>
+    <button class="btn btn-reset" id="btnReset" onclick="resetAll()">🗑️ 초기화</button>
     <button class="btn btn-save"  id="btnSave"  onclick="saveToNotion()" style="display:none">💾 노션 저장</button>
   </div>
 
@@ -755,8 +758,8 @@ function onDrop(e) {
 
   const color=SWAP_PALETTE[newPairs.length%SWAP_PALETTE.length];
   newPairs.push({aName:nameA??'빈자리', bName:nameB??'빈자리', color});
-  if(nameA!==null) newMap[tgt]    ={partner:nameA, color};
-  if(nameB!==null) newMap[dragSrc]={partner:nameB, color};
+  if(nameA!==null) newMap[tgt]    ={partner:nameB??'빈자리', color};
+  if(nameB!==null) newMap[dragSrc]={partner:nameA??'빈자리', color};
 
   pushHistory({seats:newSeats, swapPairs:newPairs, swappedMap:newMap, prevOccupants:curPrev()});
   dragSrc=null; render();
@@ -768,6 +771,18 @@ function onDrop(e) {
 function pushHistory(state) { history=history.slice(0,histIdx+1); history.push(state); histIdx=history.length-1; }
 function undo() { if(histIdx<=0||animating) return; histIdx--; render(); }
 function redo() { if(histIdx>=history.length-1||animating) return; histIdx++; render(); }
+
+// ================================================================
+// 초기화
+// ================================================================
+function resetAll() {
+  if(!confirm('화면의 배치를 초기화할까요?\n(저장된 이력은 지워지지 않습니다)')) return;
+  history  = [{seats:Array(TOTAL).fill(null), swapPairs:[], swappedMap:{}, prevOccupants:[]}];
+  histIdx  = 0;
+  document.getElementById('resultBar').classList.remove('visible');
+  document.getElementById('btnSave').style.display = 'none';
+  render();
+}
 
 // ================================================================
 // Notion 저장
